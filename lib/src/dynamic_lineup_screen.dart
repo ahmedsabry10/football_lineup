@@ -17,6 +17,8 @@ class DynamicLineupScreen extends StatefulWidget {
     this.onFormationChanged,
     this.headerTitle,
     this.nameLabelStyle = NameLabelStyle.compact, // NEW: Name label style
+    this.playerNameColor = Colors.white,
+    this.playerNameBackgroundColor = const Color(0xCC000000),
     this.fieldGradientColors = const [
       Color(0xFF1B5E20),
       Color(0xFF2E7D32),
@@ -35,6 +37,8 @@ class DynamicLineupScreen extends StatefulWidget {
   final void Function(int teamIndex, String formation)? onFormationChanged;
   final String? headerTitle;
   final NameLabelStyle nameLabelStyle; // Name label design
+  final Color playerNameColor;
+  final Color playerNameBackgroundColor;
   final List<Color> fieldGradientColors;
   final bool showFormationInfo;
   final bool showTeamSelector;
@@ -232,6 +236,8 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
           size: playerSize,
           isSmallScreen: isSmallScreen,
           nameLabelStyle: widget.nameLabelStyle,
+          playerNameColor: widget.playerNameColor,
+          playerNameBackgroundColor: widget.playerNameBackgroundColor,
         ),
       );
     }).toList();

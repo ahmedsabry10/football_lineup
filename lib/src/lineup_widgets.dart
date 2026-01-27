@@ -121,6 +121,8 @@ class PlayerAvatar extends StatelessWidget {
     this.size = 56.0,
     this.isSmallScreen = false,
     this.nameLabelStyle = NameLabelStyle.compact,
+    this.playerNameColor = Colors.white,
+    this.playerNameBackgroundColor = const Color(0xCC000000),
   });
 
   final Player player;
@@ -130,6 +132,8 @@ class PlayerAvatar extends StatelessWidget {
   final double size;
   final bool isSmallScreen;
   final NameLabelStyle nameLabelStyle;
+  final Color playerNameColor;
+  final Color playerNameBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +243,8 @@ class PlayerAvatar extends StatelessWidget {
           color: team.primaryColor,
           isSmallScreen: isSmallScreen,
           maxWidth: size * 1.8,
+          playerNameColor: playerNameColor,
+          playerNameBackgroundColor: playerNameBackgroundColor,
         );
       case NameLabelStyle.minimal:
         return _MinimalLabel(
@@ -247,6 +253,8 @@ class PlayerAvatar extends StatelessWidget {
           color: team.primaryColor,
           isSmallScreen: isSmallScreen,
           maxWidth: size * 1.8,
+          playerNameColor: playerNameColor,
+          playerNameBackgroundColor: playerNameBackgroundColor,
         );
       case NameLabelStyle.badge:
         return _BadgeLabel(
@@ -255,6 +263,8 @@ class PlayerAvatar extends StatelessWidget {
           color: team.primaryColor,
           isSmallScreen: isSmallScreen,
           maxWidth: size * 1.8,
+          playerNameColor: playerNameColor,
+          playerNameBackgroundColor: playerNameBackgroundColor,
         );
       case NameLabelStyle.gradient:
         return _GradientLabel(
@@ -264,6 +274,8 @@ class PlayerAvatar extends StatelessWidget {
           secondaryColor: team.secondaryColor,
           isSmallScreen: isSmallScreen,
           maxWidth: size * 1.8,
+          playerNameColor: playerNameColor,
+          playerNameBackgroundColor: playerNameBackgroundColor,
         );
     }
   }
@@ -285,6 +297,8 @@ class _CompactLabel extends StatelessWidget {
     required this.color,
     required this.isSmallScreen,
     required this.maxWidth,
+    required this.playerNameColor,
+    required this.playerNameBackgroundColor,
   });
 
   final String name;
@@ -292,6 +306,8 @@ class _CompactLabel extends StatelessWidget {
   final Color color;
   final bool isSmallScreen;
   final double maxWidth;
+  final Color playerNameColor;
+  final Color playerNameBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +318,7 @@ class _CompactLabel extends StatelessWidget {
       ),
       constraints: BoxConstraints(maxWidth: maxWidth),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.75),
+        color: playerNameBackgroundColor,
         borderRadius: BorderRadius.circular(8),
         border: isSelected ? Border.all(color: color, width: 1.5) : null,
       ),
@@ -312,7 +328,7 @@ class _CompactLabel extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: Colors.white,
+          color: playerNameColor,
           fontSize: isSmallScreen ? 9 : 10,
           fontWeight: FontWeight.w600,
         ),
@@ -342,6 +358,8 @@ class _MinimalLabel extends StatelessWidget {
     required this.color,
     required this.isSmallScreen,
     required this.maxWidth,
+    required this.playerNameColor,
+    required this.playerNameBackgroundColor,
   });
 
   final String name;
@@ -349,6 +367,8 @@ class _MinimalLabel extends StatelessWidget {
   final Color color;
   final bool isSmallScreen;
   final double maxWidth;
+  final Color playerNameColor;
+  final Color playerNameBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +380,7 @@ class _MinimalLabel extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: isSelected ? color : Colors.white,
+          color: isSelected ? color : playerNameColor,
           fontSize: isSmallScreen ? 9 : 10,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
           shadows: [
@@ -397,6 +417,8 @@ class _BadgeLabel extends StatelessWidget {
     required this.color,
     required this.isSmallScreen,
     required this.maxWidth,
+    required this.playerNameColor,
+    required this.playerNameBackgroundColor,
   });
 
   final String name;
@@ -404,6 +426,8 @@ class _BadgeLabel extends StatelessWidget {
   final Color color;
   final bool isSmallScreen;
   final double maxWidth;
+  final Color playerNameColor;
+  final Color playerNameBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -414,7 +438,7 @@ class _BadgeLabel extends StatelessWidget {
       ),
       constraints: BoxConstraints(maxWidth: maxWidth),
       decoration: BoxDecoration(
-        color: isSelected ? color : Colors.black.withOpacity(0.7),
+        color: isSelected ? color : playerNameBackgroundColor,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -423,7 +447,7 @@ class _BadgeLabel extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: Colors.white,
+          color: playerNameColor,
           fontSize: isSmallScreen ? 8 : 9,
           fontWeight: FontWeight.bold,
         ),
@@ -454,6 +478,8 @@ class _GradientLabel extends StatelessWidget {
     required this.secondaryColor,
     required this.isSmallScreen,
     required this.maxWidth,
+    required this.playerNameColor,
+    required this.playerNameBackgroundColor,
   });
 
   final String name;
@@ -462,6 +488,8 @@ class _GradientLabel extends StatelessWidget {
   final Color secondaryColor;
   final bool isSmallScreen;
   final double maxWidth;
+  final Color playerNameColor;
+  final Color playerNameBackgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -475,7 +503,7 @@ class _GradientLabel extends StatelessWidget {
         gradient: isSelected
             ? LinearGradient(colors: [primaryColor, secondaryColor])
             : null,
-        color: isSelected ? null : Colors.black.withOpacity(0.7),
+        color: isSelected ? null : playerNameBackgroundColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -484,7 +512,7 @@ class _GradientLabel extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: Colors.white,
+          color: playerNameColor,
           fontSize: isSmallScreen ? 9 : 10,
           fontWeight: FontWeight.w600,
         ),
