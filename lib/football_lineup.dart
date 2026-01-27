@@ -5,17 +5,17 @@
 library football_lineup;
 
 // Configuration
-export 'field_config.dart';
-export 'formation_presets.dart';
+export 'src/field_config.dart';
+export 'src/formation_presets.dart';
 
 // Models
-export 'team_lineup.dart';
+export 'src/team_lineup.dart';
 
 // Painters
-export 'field_painter.dart';
+export 'src/field_painter.dart';
 
 // Widgets
-export 'lineup_widgets.dart';
+export 'src/lineup_widgets.dart';
 
 // Screens
-export 'dynamic_lineup_screen.dart';
+export 'src/dynamic_lineup_screen.dart';

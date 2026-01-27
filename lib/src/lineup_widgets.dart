@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:football_lineup/team_lineup.dart';
+import 'package:football_lineup/src/team_lineup.dart';
 
 /// Team selector widget (matches original design)
 class TeamSelector extends StatelessWidget {
