@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:ui' as ui;
 import 'field_config.dart';
 import 'field_painter.dart';
 import 'formation_presets.dart';
@@ -15,6 +14,7 @@ class DynamicLineupScreen extends StatefulWidget {
     this.fieldType = FieldType.standard,
     this.backgroundColor = const Color(0xFF0A0E27),
     this.onFormationChanged,
+    this.onPlayerTap,
     this.headerTitle,
     this.nameLabelStyle = NameLabelStyle.compact, // NEW: Name label style
     this.playerNameColor = Colors.white,
@@ -35,6 +35,7 @@ class DynamicLineupScreen extends StatefulWidget {
   final FieldType fieldType;
   final Color backgroundColor;
   final void Function(int teamIndex, String formation)? onFormationChanged;
+  final void Function(Player player, TeamLineup team)? onPlayerTap;
   final String? headerTitle;
   final NameLabelStyle nameLabelStyle; // Name label design
   final Color playerNameColor;
@@ -143,8 +144,6 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                     Positioned.fill(
                       child: _buildField(isSmallScreen),
                     ),
-                    if (selectedPlayer != null)
-                      _buildPlayerDetails(isSmallScreen),
                   ],
                 ),
               ),
@@ -232,6 +231,8 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
               selectedPlayer =
                   selectedPlayer?.number == player.number ? null : player;
             });
+            // Call the dynamic callback if provided
+            widget.onPlayerTap?.call(player, _currentTeam);
           },
           size: playerSize,
           isSmallScreen: isSmallScreen,
@@ -241,94 +242,6 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
         ),
       );
     }).toList();
-  }
-
-  Widget _buildPlayerDetails(bool isSmallScreen) {
-    return Positioned(
-      bottom: isSmallScreen ? 80 : 100,
-      left: isSmallScreen ? 12 : 16,
-      right: isSmallScreen ? 12 : 16,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  _currentTeam.primaryColor.withOpacity(0.9),
-                  _currentTeam.secondaryColor.withOpacity(0.9),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.2),
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: isSmallScreen ? 50 : 60,
-                  height: isSmallScreen ? 50 : 60,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${selectedPlayer!.number}',
-                      style: TextStyle(
-                        color: widget.backgroundColor,
-                        fontSize: isSmallScreen ? 20 : 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(width: isSmallScreen ? 12 : 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        selectedPlayer!.name,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isSmallScreen ? 16 : 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: isSmallScreen ? 2 : 4),
-                      Text(
-                        selectedPlayer!.positionName,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: isSmallScreen ? 12 : 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: isSmallScreen ? 20 : 24,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      selectedPlayer = null;
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildFormationInfo(bool isSmallScreen) {
