@@ -5,7 +5,18 @@ import 'formation_presets.dart';
 import 'lineup_widgets.dart';
 import 'team_lineup.dart';
 
-/// Main dynamic lineup screen that supports all field types
+/// Callback when player positions are swapped
+typedef OnPositionsSwapped = void Function(
+  int teamIndex,
+  int playerIndex1,
+  int playerIndex2,
+  Player player1,
+  Player player2,
+  Offset position1,
+  Offset position2,
+);
+
+/// Main dynamic lineup screen with drag & drop support
 class DynamicLineupScreen extends StatefulWidget {
   const DynamicLineupScreen({
     super.key,
@@ -15,8 +26,10 @@ class DynamicLineupScreen extends StatefulWidget {
     this.backgroundColor = const Color(0xFF0A0E27),
     this.onFormationChanged,
     this.onPlayerTap,
+    this.onPositionsSwapped,
+    this.enableSwapPosition = false,
     this.headerTitle,
-    this.nameLabelStyle = NameLabelStyle.compact, // NEW: Name label style
+    this.nameLabelStyle = NameLabelStyle.compact,
     this.playerNameColor = Colors.white,
     this.playerNameBackgroundColor = const Color(0xCC000000),
     this.fieldGradientColors = const [
@@ -36,8 +49,10 @@ class DynamicLineupScreen extends StatefulWidget {
   final Color backgroundColor;
   final void Function(int teamIndex, String formation)? onFormationChanged;
   final void Function(Player player, TeamLineup team)? onPlayerTap;
+  final OnPositionsSwapped? onPositionsSwapped;
+  final bool enableSwapPosition;
   final String? headerTitle;
-  final NameLabelStyle nameLabelStyle; // Name label design
+  final NameLabelStyle nameLabelStyle;
   final Color playerNameColor;
   final Color playerNameBackgroundColor;
   final List<Color> fieldGradientColors;
@@ -53,10 +68,18 @@ class DynamicLineupScreen extends StatefulWidget {
 class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
   int selectedTeam = 0;
   Player? selectedPlayer;
-  final TextEditingController _searchController = TextEditingController();
   final Map<int, String> _selectedFormation = {};
-
   late FieldConfig _fieldConfig;
+
+  // Drag & Drop state
+  int? _draggingPlayerIndex;
+  int? _hoveredPlayerIndex;
+
+  // Local position overrides (when positions are swapped)
+  Map<int, List<Offset>> _teamPositionOverrides = {
+    0: [],
+    1: [],
+  };
 
   @override
   void initState() {
@@ -70,6 +93,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     if (oldWidget.fieldType != widget.fieldType) {
       _fieldConfig = FormationPresets.getConfig(widget.fieldType);
       _selectedFormation.clear();
+      _teamPositionOverrides.clear();
     }
     if (oldWidget.singleTeamMode != widget.singleTeamMode ||
         oldWidget.singleTeamIndex != widget.singleTeamIndex) {
@@ -87,12 +111,19 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
           ? widget.team1
           : widget.team2;
 
+  int get _currentTeamIndex =>
+      widget.singleTeamMode ? widget.singleTeamIndex : selectedTeam;
+
   String get _currentFormation =>
-      _selectedFormation[
-          widget.singleTeamMode ? widget.singleTeamIndex : selectedTeam] ??
-      _currentTeam.formation;
+      _selectedFormation[_currentTeamIndex] ?? _currentTeam.formation;
 
   List<Offset> _getFormationOffsets() {
+    // First check if we have position overrides for this team
+    if (_teamPositionOverrides[_currentTeamIndex]?.isNotEmpty ?? false) {
+      return _teamPositionOverrides[_currentTeamIndex]!;
+    }
+
+    // Otherwise use formation positions
     final formationData = _fieldConfig.formations[_currentFormation];
     if (formationData != null) {
       return formationData.positions.map((p) => Offset(p.dx, p.dy)).toList();
@@ -100,6 +131,45 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     return _fieldConfig.formations.values.first.positions
         .map((p) => Offset(p.dx, p.dy))
         .toList();
+  }
+
+  void _handlePositionSwap(int fromIndex, int toIndex) {
+    if (fromIndex == toIndex) return;
+
+    final players = _currentTeam.players;
+    if (fromIndex >= players.length || toIndex >= players.length) return;
+
+    setState(() {
+      // Get current positions
+      final positions = _getFormationOffsets();
+
+      // Initialize position overrides if needed
+      if (_teamPositionOverrides[_currentTeamIndex]?.isEmpty ?? true) {
+        _teamPositionOverrides[_currentTeamIndex] = List.from(positions);
+      }
+
+      // Swap positions
+      final tempPosition =
+          _teamPositionOverrides[_currentTeamIndex]![fromIndex];
+      _teamPositionOverrides[_currentTeamIndex]![fromIndex] =
+          _teamPositionOverrides[_currentTeamIndex]![toIndex];
+      _teamPositionOverrides[_currentTeamIndex]![toIndex] = tempPosition;
+
+      _draggingPlayerIndex = null;
+      _hoveredPlayerIndex = null;
+    });
+
+    // Call callback with swap information
+    final positions = _teamPositionOverrides[_currentTeamIndex]!;
+    widget.onPositionsSwapped?.call(
+      _currentTeamIndex,
+      fromIndex,
+      toIndex,
+      players[fromIndex],
+      players[toIndex],
+      positions[fromIndex],
+      positions[toIndex],
+    );
   }
 
   @override
@@ -114,9 +184,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
           padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
           child: Column(
             children: [
-              LineupsHeader(
-                isSmallScreen: isSmallScreen,
-              ),
+              LineupsHeader(isSmallScreen: isSmallScreen),
               if (widget.showTeamSelector && !widget.singleTeamMode)
                 TeamSelector(
                   teams: [
@@ -137,6 +205,41 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                   isSmallScreen: isSmallScreen,
                 ),
               SizedBox(height: isSmallScreen ? 8 : 12),
+
+              // Drag & Drop indicator
+              if (widget.enableSwapPosition && _draggingPlayerIndex != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: _currentTeam.primaryColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentTeam.primaryColor.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.swap_horiz,
+                        color: _currentTeam.primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Drag to swap positions',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               Expanded(
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -161,19 +264,11 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
       margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
-        // boxShadow: [
-        //   BoxShadow(
-        //     color: _currentTeam.primaryColor.withOpacity(0.15),
-        //     blurRadius: 20,
-        //     offset: const Offset(0, 8),
-        //   ),
-        // ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
         child: Stack(
           children: [
-            // Field gradient background (customizable)
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -186,12 +281,10 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                 ),
               ),
             ),
-            // Field markings
             CustomPaint(
               painter: FieldPainterFactory.create(_fieldConfig),
               size: Size.infinite,
             ),
-            // Players
             LayoutBuilder(
               builder: (context, constraints) {
                 return Stack(
@@ -207,41 +300,195 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
 
   List<Widget> _buildPlayers(BoxConstraints constraints, bool isSmallScreen) {
     final offsets = _getFormationOffsets();
-
-    // if offsets shorter than players, fall back to player.position for extras
+    final playerSize = isSmallScreen ? 48.0 : 56.0;
 
     return _currentTeam.players.asMap().entries.map((entry) {
       final idx = entry.key;
       final player = entry.value;
 
-      // Prefer formation position; if missing, use player's stored position
-      Offset position = idx < offsets.length ? offsets[idx] : player.position;
+      // FIX: Handle nullable position properly
+      Offset position;
+      if (idx < offsets.length) {
+        // Use formation position by index
+        position = offsets[idx];
+      } else if (player.position != null) {
+        // Use manual position if specified
+        position = player.position!;
+      } else {
+        // Fallback to center if neither available
+        position = const Offset(0.5, 0.5);
+      }
 
-      final playerSize = isSmallScreen ? 48.0 : 56.0;
+      final isHovered = _hoveredPlayerIndex == idx;
+      final isDragging = _draggingPlayerIndex == idx;
 
       return Positioned(
         left: position.dx * constraints.maxWidth - (playerSize / 2),
         top: position.dy * constraints.maxHeight - (playerSize / 2 + 20),
+        child: widget.enableSwapPosition
+            ? _buildDraggablePlayer(
+                player,
+                idx,
+                playerSize,
+                isSmallScreen,
+                isHovered,
+                isDragging,
+              )
+            : _buildStaticPlayer(player, idx, playerSize, isSmallScreen),
+      );
+    }).toList();
+  }
+
+  Widget _buildDraggablePlayer(
+    Player player,
+    int index,
+    double playerSize,
+    bool isSmallScreen,
+    bool isHovered,
+    bool isDragging,
+  ) {
+    return LongPressDraggable<int>(
+      data: index,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Transform.scale(
+          scale: 1.3,
+          child: Opacity(
+            opacity: 0.9,
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _currentTeam.primaryColor.withOpacity(0.6),
+                    blurRadius: 25,
+                    spreadRadius: 8,
+                  ),
+                ],
+              ),
+              child: PlayerAvatar(
+                player: player,
+                team: _currentTeam,
+                isSelected: true,
+                onTap: () {},
+                size: playerSize,
+                isSmallScreen: isSmallScreen,
+                nameLabelStyle: widget.nameLabelStyle,
+                playerNameColor: widget.playerNameColor,
+                playerNameBackgroundColor: widget.playerNameBackgroundColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.2,
         child: PlayerAvatar(
           player: player,
           team: _currentTeam,
-          isSelected: selectedPlayer?.number == player.number,
-          onTap: () {
-            setState(() {
-              selectedPlayer =
-                  selectedPlayer?.number == player.number ? null : player;
-            });
-            // Call the dynamic callback if provided
-            widget.onPlayerTap?.call(player, _currentTeam);
-          },
+          isSelected: false,
+          onTap: () {},
           size: playerSize,
           isSmallScreen: isSmallScreen,
           nameLabelStyle: widget.nameLabelStyle,
           playerNameColor: widget.playerNameColor,
           playerNameBackgroundColor: widget.playerNameBackgroundColor,
         ),
-      );
-    }).toList();
+      ),
+      onDragStarted: () {
+        setState(() {
+          _draggingPlayerIndex = index;
+        });
+      },
+      onDragEnd: (details) {
+        setState(() {
+          _draggingPlayerIndex = null;
+          _hoveredPlayerIndex = null;
+        });
+      },
+      onDraggableCanceled: (velocity, offset) {
+        setState(() {
+          _draggingPlayerIndex = null;
+          _hoveredPlayerIndex = null;
+        });
+      },
+      child: DragTarget<int>(
+        onWillAccept: (fromIndex) {
+          if (fromIndex == null || fromIndex == index) return false;
+          setState(() {
+            _hoveredPlayerIndex = index;
+          });
+          return true;
+        },
+        onLeave: (fromIndex) {
+          setState(() {
+            _hoveredPlayerIndex = null;
+          });
+        },
+        onAccept: (fromIndex) {
+          _handlePositionSwap(fromIndex, index);
+        },
+        builder: (context, candidateData, rejectedData) {
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: isHovered
+                  ? [
+                      BoxShadow(
+                        color: _currentTeam.primaryColor.withOpacity(0.6),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: PlayerAvatar(
+              player: player,
+              team: _currentTeam,
+              isSelected: selectedPlayer?.number == player.number || isHovered,
+              onTap: () {
+                setState(() {
+                  selectedPlayer =
+                      selectedPlayer?.number == player.number ? null : player;
+                });
+                widget.onPlayerTap?.call(player, _currentTeam);
+              },
+              size: playerSize,
+              isSmallScreen: isSmallScreen,
+              nameLabelStyle: widget.nameLabelStyle,
+              playerNameColor: widget.playerNameColor,
+              playerNameBackgroundColor: widget.playerNameBackgroundColor,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStaticPlayer(
+    Player player,
+    int index,
+    double playerSize,
+    bool isSmallScreen,
+  ) {
+    return PlayerAvatar(
+      player: player,
+      team: _currentTeam,
+      isSelected: selectedPlayer?.number == player.number,
+      onTap: () {
+        setState(() {
+          selectedPlayer =
+              selectedPlayer?.number == player.number ? null : player;
+        });
+        widget.onPlayerTap?.call(player, _currentTeam);
+      },
+      size: playerSize,
+      isSmallScreen: isSmallScreen,
+      nameLabelStyle: widget.nameLabelStyle,
+      playerNameColor: widget.playerNameColor,
+      playerNameBackgroundColor: widget.playerNameBackgroundColor,
+    );
   }
 
   Widget _buildFormationInfo(bool isSmallScreen) {
@@ -261,7 +508,6 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
       ),
       child: Row(
         children: [
-          // Formation
           InkWell(
             onTap: () => _showFormationPicker(isSmallScreen),
             child: Container(
@@ -284,8 +530,8 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                       fontSize: isSmallScreen ? 13 : 14,
                     ),
                   ),
-                  SizedBox(width: 6),
-                  Icon(
+                  const SizedBox(width: 6),
+                  const Icon(
                     Icons.keyboard_arrow_down,
                     color: Colors.white,
                     size: 16,
@@ -294,19 +540,13 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
               ),
             ),
           ),
-
-          Spacer(),
-
-          // Coach
+          const Spacer(),
           _buildCompactInfo(
             Icons.person,
             _currentTeam.coach,
             isSmallScreen,
           ),
-
           SizedBox(width: isSmallScreen ? 16 : 20),
-
-          // Players
           _buildCompactInfo(
             Icons.groups,
             '${_currentTeam.players.length}/${widget.fieldType.playerCount}',
@@ -326,7 +566,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
           color: Colors.grey[400],
           size: isSmallScreen ? 16 : 18,
         ),
-        SizedBox(width: 6),
+        const SizedBox(width: 6),
         Text(
           value,
           style: TextStyle(
@@ -379,18 +619,14 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                     children: [
                       _buildPickerHeader(ctx, search, setStateSB, isSmallScreen,
                           filtered.length),
-                      SizedBox(height: isSmallScreen ? 20 : 24),
+                      const SizedBox(height: 24),
                       Expanded(
                         child: filtered.isEmpty
                             ? _buildEmptyState(isSmallScreen)
                             : ListView.builder(
                                 controller: scrollCtrl,
-                                padding: EdgeInsets.fromLTRB(
-                                  isSmallScreen ? 20 : 24,
-                                  0,
-                                  isSmallScreen ? 20 : 24,
-                                  isSmallScreen ? 20 : 24,
-                                ),
+                                padding:
+                                    const EdgeInsets.fromLTRB(24, 0, 24, 24),
                                 itemCount: filtered.length,
                                 itemBuilder: (context, idx) {
                                   final entry = filtered[idx];
@@ -426,15 +662,9 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     int count,
   ) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isSmallScreen ? 20 : 24,
-        isSmallScreen ? 20 : 24,
-        isSmallScreen ? 20 : 24,
-        0,
-      ),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       child: Column(
         children: [
-          // Drag handle
           Container(
             width: 40,
             height: 4,
@@ -443,8 +673,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          SizedBox(height: isSmallScreen ? 16 : 20),
-          // Header
+          const SizedBox(height: 20),
           Row(
             children: [
               Container(
@@ -459,30 +688,30 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                   ),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.dashboard_customize_rounded,
                   color: Colors.white,
-                  size: isSmallScreen ? 24 : 28,
+                  size: 28,
                 ),
               ),
-              SizedBox(width: isSmallScreen ? 12 : 16),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Choose Formation',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 20 : 24,
+                        fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
                       '$count formations available',
                       style: TextStyle(
-                        fontSize: isSmallScreen ? 13 : 14,
+                        fontSize: 14,
                         color: Colors.grey[400],
                       ),
                     ),
@@ -495,8 +724,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
               ),
             ],
           ),
-          SizedBox(height: isSmallScreen ? 16 : 20),
-          // Search bar
+          const SizedBox(height: 20),
           TextField(
             onChanged: (v) => setStateSB(() => search = v),
             style: const TextStyle(color: Colors.white),
@@ -525,11 +753,13 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     BuildContext ctx,
   ) {
     return Padding(
-      padding: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
+      padding: const EdgeInsets.only(bottom: 16),
       child: GestureDetector(
         onTap: () {
           setState(() {
             _selectedFormation[selectedTeam] = formationName;
+            // Reset position overrides when formation changes
+            _teamPositionOverrides[_currentTeamIndex] = [];
           });
           widget.onFormationChanged?.call(selectedTeam, formationName);
           Navigator.of(ctx).pop();
@@ -549,13 +779,12 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
             ),
           ),
           child: Padding(
-            padding: EdgeInsets.all(isSmallScreen ? 14 : 16),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Formation preview
                 Container(
-                  width: isSmallScreen ? 70 : 80,
-                  height: isSmallScreen ? 90 : 100,
+                  width: 80,
+                  height: 100,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
@@ -564,8 +793,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                   ),
                   child: _buildFormationPreview(formationData, isSelected),
                 ),
-                SizedBox(width: isSmallScreen ? 14 : 16),
-                // Formation info
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,8 +802,8 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                         children: [
                           Text(
                             formationName,
-                            style: TextStyle(
-                              fontSize: isSmallScreen ? 16 : 18,
+                            style: const TextStyle(
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                             ),
@@ -601,17 +829,17 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
                             ),
                         ],
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Text(
                         formationData.description,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: isSmallScreen ? 12 : 13,
+                          fontSize: 13,
                           color: Colors.grey[400],
                         ),
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
@@ -685,26 +913,20 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
         children: [
           Icon(
             Icons.search_off_rounded,
-            size: isSmallScreen ? 48 : 56,
+            size: 56,
             color: Colors.grey[600],
           ),
-          SizedBox(height: isSmallScreen ? 16 : 20),
-          Text(
+          const SizedBox(height: 20),
+          const Text(
             'No formations found',
             style: TextStyle(
               color: Colors.white,
-              fontSize: isSmallScreen ? 16 : 18,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 }

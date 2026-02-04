@@ -5,14 +5,14 @@ class Player {
   const Player({
     required this.name,
     required this.number,
-    required this.position,
     required this.positionName,
     this.imageUrl,
+    this.position, // Made optional - will be auto-assigned from formation
   });
 
   final String name;
   final int number;
-  final Offset position;
+  final Offset? position; // Now nullable
   final String positionName;
   final String? imageUrl;
 
