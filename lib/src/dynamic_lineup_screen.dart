@@ -28,7 +28,6 @@ class DynamicLineupScreen extends StatefulWidget {
     this.onPlayerTap,
     this.onPositionsSwapped,
     this.enableSwapPosition = false,
-    this.headerTitle,
     this.nameLabelStyle = NameLabelStyle.compact,
     this.playerNameColor = Colors.white,
     this.playerNameBackgroundColor = const Color(0xCC000000),
@@ -51,7 +50,6 @@ class DynamicLineupScreen extends StatefulWidget {
   final void Function(Player player, TeamLineup team)? onPlayerTap;
   final OnPositionsSwapped? onPositionsSwapped;
   final bool enableSwapPosition;
-  final String? headerTitle;
   final NameLabelStyle nameLabelStyle;
   final Color playerNameColor;
   final Color playerNameBackgroundColor;

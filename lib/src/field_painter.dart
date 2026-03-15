@@ -111,29 +111,15 @@ class StandardFieldPainter extends BaseFieldPainter {
     // Penalty spots
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(
-      Offset(size.width / 2, 8 + penaltyBoxHeight * 0.65),
+      Offset(size.width / 2, 8 + penaltyBoxHeight * 0.75),
       3,
       paint,
     );
     canvas.drawCircle(
-      Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.65),
+      Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.75),
       3,
       paint,
     );
-
-    // Penalty arcs
-    paint.style = PaintingStyle.stroke;
-    final arcRect1 = Rect.fromCircle(
-      center: Offset(size.width / 2, 8 + penaltyBoxHeight * 0.65),
-      radius: size.width * 0.08,
-    );
-    canvas.drawArc(arcRect1, 0.3, 2.5, false, paint);
-
-    final arcRect2 = Rect.fromCircle(
-      center: Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.65),
-      radius: size.width * 0.08,
-    );
-    canvas.drawArc(arcRect2, 3.4, 2.5, false, paint);
   }
 }
 
@@ -203,12 +189,12 @@ class SevenASideFieldPainter extends BaseFieldPainter {
     // Penalty spots
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(
-      Offset(size.width / 2, 8 + penaltyBoxHeight * 0.6),
+      Offset(size.width / 2, 8 + penaltyBoxHeight * 0.72),
       3,
       paint,
     );
     canvas.drawCircle(
-      Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.6),
+      Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.72),
       3,
       paint,
     );
@@ -281,39 +267,13 @@ class FiveASideFieldPainter extends BaseFieldPainter {
     // Penalty spots
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(
-      Offset(size.width / 2, 8 + penaltyBoxHeight * 0.55),
+      Offset(size.width / 2, 8 + penaltyBoxHeight * 0.68),
       2.5,
       paint,
     );
     canvas.drawCircle(
-      Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.55),
+      Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.68),
       2.5,
-      paint,
-    );
-
-    // Penalty arcs (D-arc)
-    paint.style = PaintingStyle.stroke;
-    final arcRadius = size.width * 0.12;
-
-    canvas.drawArc(
-      Rect.fromCircle(
-        center: Offset(size.width / 2, 8 + penaltyBoxHeight * 0.55),
-        radius: arcRadius,
-      ),
-      0.8,
-      1.54,
-      false,
-      paint,
-    );
-
-    canvas.drawArc(
-      Rect.fromCircle(
-        center: Offset(size.width / 2, size.height - 8 - penaltyBoxHeight * 0.55),
-        radius: arcRadius,
-      ),
-      -2.34,
-      1.54,
-      false,
       paint,
     );
   }
