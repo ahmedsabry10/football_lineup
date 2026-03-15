@@ -9,12 +9,24 @@ class TeamSelector extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelect,
     this.isSmallScreen = false,
+    this.selectedBackgroundColor = const Color(0xFF2C2C2E),
+    this.unselectedBackgroundColor = const Color(0xFF1C1C1E),
+    this.selectedBorderColor = const Color(0xFF3A3A3C),
+    this.borderRadius = 12,
+    this.selectedTextColor = const Color(0xFFE5E5E7),
+    this.unselectedTextColor = const Color(0xB3FFFFFF),
   });
 
   final List<Map<String, String>> teams;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final bool isSmallScreen;
+  final Color selectedBackgroundColor;
+  final Color unselectedBackgroundColor;
+  final Color selectedBorderColor;
+  final double borderRadius;
+  final Color selectedTextColor;
+  final Color unselectedTextColor;
 
   @override
   Widget build(BuildContext context) {
@@ -42,12 +54,13 @@ class TeamSelector extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFF2C2C2E)
-                        : const Color(0xFF1C1C1E).withOpacity(0.6),
-                    borderRadius:
-                        BorderRadius.circular(isSmallScreen ? 10 : 12),
+                        ? selectedBackgroundColor
+                        : unselectedBackgroundColor.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(
+                      isSmallScreen ? borderRadius - 2 : borderRadius,
+                    ),
                     border: isSelected
-                        ? Border.all(color: const Color(0xFF3A3A3C), width: 1.5)
+                        ? Border.all(color: selectedBorderColor, width: 1.5)
                         : null,
                     boxShadow: isSelected
                         ? [
@@ -73,8 +86,8 @@ class TeamSelector extends StatelessWidget {
                           team['name'] ?? '',
                           style: TextStyle(
                             color: isSelected
-                                ? const Color(0xFFE5E5E7)
-                                : Colors.white.withOpacity(0.7),
+                                ? selectedTextColor
+                                : unselectedTextColor,
                             fontSize: isSmallScreen ? 12 : 13,
                             fontWeight:
                                 isSelected ? FontWeight.w700 : FontWeight.w500,

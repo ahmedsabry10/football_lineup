@@ -5,6 +5,14 @@ import 'formation_presets.dart';
 import 'lineup_widgets.dart';
 import 'team_lineup.dart';
 
+typedef TeamSelectorBuilder = Widget Function(
+  BuildContext context,
+  List<Map<String, String>> teams,
+  int selectedIndex,
+  ValueChanged<int> onSelect,
+  bool isSmallScreen,
+);
+
 /// Callback when player positions are swapped
 typedef OnPositionsSwapped = void Function(
   int teamIndex,
@@ -40,6 +48,18 @@ class DynamicLineupScreen extends StatefulWidget {
     this.showTeamSelector = true,
     this.singleTeamMode = false,
     this.singleTeamIndex = 0,
+    this.teamSelectorBuilder,
+    this.teamSelectorSelectedBackgroundColor = const Color(0xFF2C2C2E),
+    this.teamSelectorUnselectedBackgroundColor = const Color(0xFF1C1C1E),
+    this.teamSelectorSelectedBorderColor = const Color(0xFF3A3A3C),
+    this.teamSelectorSelectedTextColor = const Color(0xFFE5E5E7),
+    this.teamSelectorUnselectedTextColor = const Color(0xB3FFFFFF),
+    this.teamSelectorBorderRadius = 12,
+    this.managerTextColor = Colors.white,
+    this.managerIconColor = const Color(0xFFB0BEC5),
+    this.playerCountTextColor = Colors.white,
+    this.playerCountIconColor = const Color(0xFFB0BEC5),
+    this.showPlayerCountInfo = true,
   });
 
   final TeamLineup team1;
@@ -58,6 +78,18 @@ class DynamicLineupScreen extends StatefulWidget {
   final bool showTeamSelector;
   final bool singleTeamMode;
   final int singleTeamIndex;
+  final TeamSelectorBuilder? teamSelectorBuilder;
+  final Color teamSelectorSelectedBackgroundColor;
+  final Color teamSelectorUnselectedBackgroundColor;
+  final Color teamSelectorSelectedBorderColor;
+  final Color teamSelectorSelectedTextColor;
+  final Color teamSelectorUnselectedTextColor;
+  final double teamSelectorBorderRadius;
+  final Color managerTextColor;
+  final Color managerIconColor;
+  final Color playerCountTextColor;
+  final Color playerCountIconColor;
+  final bool showPlayerCountInfo;
 
   @override
   State<DynamicLineupScreen> createState() => _DynamicLineupScreenState();
@@ -114,6 +146,49 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
 
   String get _currentFormation =>
       _selectedFormation[_currentTeamIndex] ?? _currentTeam.formation;
+
+  Widget _buildTeamSelector(bool isSmallScreen) {
+    final teams = [
+      {
+        'name': widget.team1.teamName,
+        'logo': widget.team1.teamLogo,
+      },
+      {
+        'name': widget.team2.teamName,
+        'logo': widget.team2.teamLogo,
+      },
+    ];
+
+    void handleSelect(int i) {
+      setState(() {
+        selectedTeam = i;
+        selectedPlayer = null;
+      });
+    }
+
+    if (widget.teamSelectorBuilder != null) {
+      return widget.teamSelectorBuilder!(
+        context,
+        teams,
+        selectedTeam,
+        handleSelect,
+        isSmallScreen,
+      );
+    }
+
+    return TeamSelector(
+      teams: teams,
+      selectedIndex: selectedTeam,
+      onSelect: handleSelect,
+      isSmallScreen: isSmallScreen,
+      selectedBackgroundColor: widget.teamSelectorSelectedBackgroundColor,
+      unselectedBackgroundColor: widget.teamSelectorUnselectedBackgroundColor,
+      selectedBorderColor: widget.teamSelectorSelectedBorderColor,
+      selectedTextColor: widget.teamSelectorSelectedTextColor,
+      unselectedTextColor: widget.teamSelectorUnselectedTextColor,
+      borderRadius: widget.teamSelectorBorderRadius,
+    );
+  }
 
   List<Offset> _getFormationOffsets() {
     // First check if we have position overrides for this team
@@ -184,24 +259,7 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
             children: [
               LineupsHeader(isSmallScreen: isSmallScreen),
               if (widget.showTeamSelector && !widget.singleTeamMode)
-                TeamSelector(
-                  teams: [
-                    {
-                      'name': widget.team1.teamName,
-                      'logo': widget.team1.teamLogo
-                    },
-                    {
-                      'name': widget.team2.teamName,
-                      'logo': widget.team2.teamLogo
-                    },
-                  ],
-                  selectedIndex: selectedTeam,
-                  onSelect: (i) => setState(() {
-                    selectedTeam = i;
-                    selectedPlayer = null;
-                  }),
-                  isSmallScreen: isSmallScreen,
-                ),
+                _buildTeamSelector(isSmallScreen),
               SizedBox(height: isSmallScreen ? 8 : 12),
 
               // Drag & Drop indicator
@@ -543,32 +601,44 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
             Icons.person,
             _currentTeam.coach,
             isSmallScreen,
+            iconColor: widget.managerIconColor,
+            textColor: widget.managerTextColor,
           ),
-          SizedBox(width: isSmallScreen ? 16 : 20),
-          _buildCompactInfo(
-            Icons.groups,
-            '${_currentTeam.players.length}/${widget.fieldType.playerCount}',
-            isSmallScreen,
-          ),
+          if (widget.showPlayerCountInfo) ...[
+            SizedBox(width: isSmallScreen ? 16 : 20),
+            _buildCompactInfo(
+              Icons.groups,
+              '${_currentTeam.players.length}/${widget.fieldType.playerCount}',
+              isSmallScreen,
+              iconColor: widget.playerCountIconColor,
+              textColor: widget.playerCountTextColor,
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildCompactInfo(IconData icon, String value, bool isSmallScreen) {
+  Widget _buildCompactInfo(
+    IconData icon,
+    String value,
+    bool isSmallScreen, {
+    required Color iconColor,
+    required Color textColor,
+  }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           icon,
-          color: Colors.grey[400],
+          color: iconColor,
           size: isSmallScreen ? 16 : 18,
         ),
         const SizedBox(width: 6),
         Text(
           value,
           style: TextStyle(
-            color: Colors.white,
+            color: textColor,
             fontSize: isSmallScreen ? 13 : 14,
             fontWeight: FontWeight.w500,
           ),
