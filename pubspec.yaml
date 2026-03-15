@@ -1,6 +1,6 @@
 name: football_lineup
 description: A flexible, dynamic football lineup package supporting 11-a-side, 7-a-side, and 5-a-side formations with customizable teams, colors, and drag-and-drop position swapping.
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/ahmedsabry10/football_lineup
 repository: https://github.com/ahmedsabry10/football_lineup
 issue_tracker: https://github.com/ahmedsabry10/football_lineup/issues
