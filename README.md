@@ -2,6 +2,20 @@
 
 A flexible Flutter package for displaying and customizing football (soccer) lineups. Supports 11-a-side, 7-a-side, and 5-a-side formations with optional drag-and-drop position swapping.
 
+## Screenshots
+
+| FC Barcelona lineup | Real Madrid lineup |
+|---------------------|--------------------|
+| ![Barcelona lineup](https://raw.githubusercontent.com/ahmedsabry10/football_lineup/main/screenshots/lineup_barcelona.png) | ![Real Madrid lineup](https://raw.githubusercontent.com/ahmedsabry10/football_lineup/main/screenshots/lineup_real_madrid.png) |
+
+| 4-3-3 formation | 4-2-3-1 formation |
+|----------------|-------------------|
+| ![4-3-3](https://raw.githubusercontent.com/ahmedsabry10/football_lineup/main/screenshots/lineup_433.png) | ![4-2-3-1](https://raw.githubusercontent.com/ahmedsabry10/football_lineup/main/screenshots/lineup_4231.png) |
+
+| Drag to swap positions | Formation picker |
+|-------------------------|-------------------|
+| ![Position swap](https://raw.githubusercontent.com/ahmedsabry10/football_lineup/main/screenshots/lineup_swap.png) | ![Formation picker](https://raw.githubusercontent.com/ahmedsabry10/football_lineup/main/screenshots/formation_picker.png) |
+
 ## Features
 
 - **Multiple field types**: Standard (11), 7-a-side, and 5-a-side with preset formations
