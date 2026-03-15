@@ -13,7 +13,6 @@ typedef TeamSelectorBuilder = Widget Function(
   bool isSmallScreen,
 );
 
-/// Callback when player positions are swapped
 typedef OnPositionsSwapped = void Function(
   int teamIndex,
   int playerIndex1,
@@ -24,7 +23,6 @@ typedef OnPositionsSwapped = void Function(
   Offset position2,
 );
 
-/// Main dynamic lineup screen with drag & drop support
 class DynamicLineupScreen extends StatefulWidget {
   const DynamicLineupScreen({
     super.key,
@@ -49,16 +47,10 @@ class DynamicLineupScreen extends StatefulWidget {
     this.singleTeamMode = false,
     this.singleTeamIndex = 0,
     this.teamSelectorBuilder,
-    this.teamSelectorSelectedBackgroundColor = const Color(0xFF2C2C2E),
-    this.teamSelectorUnselectedBackgroundColor = const Color(0xFF1C1C1E),
-    this.teamSelectorSelectedBorderColor = const Color(0xFF3A3A3C),
-    this.teamSelectorSelectedTextColor = const Color(0xFFE5E5E7),
-    this.teamSelectorUnselectedTextColor = const Color(0xB3FFFFFF),
-    this.teamSelectorBorderRadius = 12,
-    this.managerTextColor = Colors.white,
-    this.managerIconColor = const Color(0xFFB0BEC5),
-    this.playerCountTextColor = Colors.white,
-    this.playerCountIconColor = const Color(0xFFB0BEC5),
+    this.managerTextColor,
+    this.managerIconColor,
+    this.playerCountTextColor,
+    this.playerCountIconColor,
     this.showPlayerCountInfo = true,
   });
 
@@ -79,42 +71,85 @@ class DynamicLineupScreen extends StatefulWidget {
   final bool singleTeamMode;
   final int singleTeamIndex;
   final TeamSelectorBuilder? teamSelectorBuilder;
-  final Color teamSelectorSelectedBackgroundColor;
-  final Color teamSelectorUnselectedBackgroundColor;
-  final Color teamSelectorSelectedBorderColor;
-  final Color teamSelectorSelectedTextColor;
-  final Color teamSelectorUnselectedTextColor;
-  final double teamSelectorBorderRadius;
-  final Color managerTextColor;
-  final Color managerIconColor;
-  final Color playerCountTextColor;
-  final Color playerCountIconColor;
+  final Color? managerTextColor;
+  final Color? managerIconColor;
+  final Color? playerCountTextColor;
+  final Color? playerCountIconColor;
   final bool showPlayerCountInfo;
 
   @override
   State<DynamicLineupScreen> createState() => _DynamicLineupScreenState();
 }
 
-class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
+class _DynamicLineupScreenState extends State<DynamicLineupScreen>
+    with TickerProviderStateMixin {
   int selectedTeam = 0;
   Player? selectedPlayer;
   final Map<int, String> _selectedFormation = {};
   late FieldConfig _fieldConfig;
 
-  // Drag & Drop state
   int? _draggingPlayerIndex;
   int? _hoveredPlayerIndex;
+  Map<int, List<Offset>> _teamPositionOverrides = {0: [], 1: []};
 
-  // Local position overrides (when positions are swapped)
-  Map<int, List<Offset>> _teamPositionOverrides = {
-    0: [],
-    1: [],
-  };
+  late AnimationController _enterController;
+  late Animation<double> _fadeAnim;
+  late Animation<double> _slideAnim;
+
+  // ─── Adaptive Color Helpers ───────────────────────────────────────────────
+
+  bool get _isLightBackground =>
+      widget.backgroundColor.computeLuminance() > 0.5;
+
+  Color get _textColor =>
+      _isLightBackground ? const Color(0xFF0D0D0D) : Colors.white;
+
+  Color get _subtleColor => _isLightBackground
+      ? const Color(0xFF0D0D0D).withValues(alpha: 0.45)
+      : Colors.white.withValues(alpha: 0.4);
+
+  Color get _surfaceColor => _isLightBackground
+      ? const Color(0xFF0D0D0D).withValues(alpha: 0.06)
+      : Colors.white.withValues(alpha: 0.06);
+
+  Color get _borderColor => _isLightBackground
+      ? const Color(0xFF0D0D0D).withValues(alpha: 0.12)
+      : Colors.white.withValues(alpha: 0.1);
+
+  Color get _iconColor => _isLightBackground
+      ? const Color(0xFF0D0D0D).withValues(alpha: 0.5)
+      : const Color(0xFFB0BEC5);
+
+  Color get _managerTextColor => widget.managerTextColor ?? _textColor;
+  Color get _managerIconColor => widget.managerIconColor ?? _iconColor;
+  Color get _playerCountTextColor => widget.playerCountTextColor ?? _textColor;
+  Color get _playerCountIconColor => widget.playerCountIconColor ?? _iconColor;
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     _fieldConfig = FormationPresets.getConfig(widget.fieldType);
+    _enterController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _enterController,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+    );
+    _slideAnim = CurvedAnimation(
+      parent: _enterController,
+      curve: const Interval(0.1, 0.8, curve: Curves.easeOutCubic),
+    );
+    _enterController.forward();
+  }
+
+  @override
+  void dispose() {
+    _enterController.dispose();
+    super.dispose();
   }
 
   @override
@@ -136,6 +171,13 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     }
   }
 
+  void _selectTeam(int index) {
+    setState(() {
+      selectedTeam = index;
+      selectedPlayer = null;
+    });
+  }
+
   TeamLineup get _currentTeam =>
       (widget.singleTeamMode ? widget.singleTeamIndex : selectedTeam) == 0
           ? widget.team1
@@ -147,56 +189,10 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
   String get _currentFormation =>
       _selectedFormation[_currentTeamIndex] ?? _currentTeam.formation;
 
-  Widget _buildTeamSelector(bool isSmallScreen) {
-    final teams = [
-      {
-        'name': widget.team1.teamName,
-        'logo': widget.team1.teamLogo,
-      },
-      {
-        'name': widget.team2.teamName,
-        'logo': widget.team2.teamLogo,
-      },
-    ];
-
-    void handleSelect(int i) {
-      setState(() {
-        selectedTeam = i;
-        selectedPlayer = null;
-      });
-    }
-
-    if (widget.teamSelectorBuilder != null) {
-      return widget.teamSelectorBuilder!(
-        context,
-        teams,
-        selectedTeam,
-        handleSelect,
-        isSmallScreen,
-      );
-    }
-
-    return TeamSelector(
-      teams: teams,
-      selectedIndex: selectedTeam,
-      onSelect: handleSelect,
-      isSmallScreen: isSmallScreen,
-      selectedBackgroundColor: widget.teamSelectorSelectedBackgroundColor,
-      unselectedBackgroundColor: widget.teamSelectorUnselectedBackgroundColor,
-      selectedBorderColor: widget.teamSelectorSelectedBorderColor,
-      selectedTextColor: widget.teamSelectorSelectedTextColor,
-      unselectedTextColor: widget.teamSelectorUnselectedTextColor,
-      borderRadius: widget.teamSelectorBorderRadius,
-    );
-  }
-
   List<Offset> _getFormationOffsets() {
-    // First check if we have position overrides for this team
     if (_teamPositionOverrides[_currentTeamIndex]?.isNotEmpty ?? false) {
       return _teamPositionOverrides[_currentTeamIndex]!;
     }
-
-    // Otherwise use formation positions
     final formationData = _fieldConfig.formations[_currentFormation];
     if (formationData != null) {
       return formationData.positions.map((p) => Offset(p.dx, p.dy)).toList();
@@ -208,31 +204,22 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
 
   void _handlePositionSwap(int fromIndex, int toIndex) {
     if (fromIndex == toIndex) return;
-
     final players = _currentTeam.players;
     if (fromIndex >= players.length || toIndex >= players.length) return;
 
     setState(() {
-      // Get current positions
       final positions = _getFormationOffsets();
-
-      // Initialize position overrides if needed
       if (_teamPositionOverrides[_currentTeamIndex]?.isEmpty ?? true) {
         _teamPositionOverrides[_currentTeamIndex] = List.from(positions);
       }
-
-      // Swap positions
-      final tempPosition =
-          _teamPositionOverrides[_currentTeamIndex]![fromIndex];
+      final temp = _teamPositionOverrides[_currentTeamIndex]![fromIndex];
       _teamPositionOverrides[_currentTeamIndex]![fromIndex] =
           _teamPositionOverrides[_currentTeamIndex]![toIndex];
-      _teamPositionOverrides[_currentTeamIndex]![toIndex] = tempPosition;
-
+      _teamPositionOverrides[_currentTeamIndex]![toIndex] = temp;
       _draggingPlayerIndex = null;
       _hoveredPlayerIndex = null;
     });
 
-    // Call callback with swap information
     final positions = _teamPositionOverrides[_currentTeamIndex]!;
     widget.onPositionsSwapped?.call(
       _currentTeamIndex,
@@ -245,69 +232,70 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     );
   }
 
+  // ─── Main Build ───────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final isSmallScreen = screenSize.width < 360;
 
+    final hasCustomBuilder = widget.showTeamSelector
+        && widget.teamSelectorBuilder != null
+        && !widget.singleTeamMode;
+
+    final hasDefaultTabs = widget.showTeamSelector
+        && !widget.singleTeamMode
+        && widget.teamSelectorBuilder == null;
+
+    final showTopBar = hasDefaultTabs;
+
     return Scaffold(
       backgroundColor: widget.backgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.all(isSmallScreen ? 8 : 12),
+        child: FadeTransition(
+          opacity: _fadeAnim,
           child: Column(
             children: [
-              LineupsHeader(isSmallScreen: isSmallScreen),
-              if (widget.showTeamSelector && !widget.singleTeamMode)
-                _buildTeamSelector(isSmallScreen),
-              SizedBox(height: isSmallScreen ? 8 : 12),
+              if (showTopBar) _buildTopBar(isSmallScreen),
 
-              // Drag & Drop indicator
+              if (hasCustomBuilder) ...[
+                const SizedBox(height: 10),
+                SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, -0.3),
+                    end: Offset.zero,
+                  ).animate(_slideAnim),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: isSmallScreen ? 14 : 18),
+                    child: widget.teamSelectorBuilder!(
+                      context,
+                      [
+                        {
+                          'name': widget.team1.teamName,
+                          'logo': widget.team1.teamLogo,
+                        },
+                        {
+                          'name': widget.team2.teamName,
+                          'logo': widget.team2.teamLogo,
+                        },
+                      ],
+                      selectedTeam,
+                      _selectTeam,
+                      isSmallScreen,
+                    ),
+                  ),
+                ),
+              ],
+
               if (widget.enableSwapPosition && _draggingPlayerIndex != null)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: _currentTeam.primaryColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _currentTeam.primaryColor.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.swap_horiz,
-                        color: _currentTeam.primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Drag to swap positions',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildSwapHint(),
 
-              Expanded(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child: _buildField(isSmallScreen),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: isSmallScreen ? 8 : 12),
-              if (widget.showFormationInfo) _buildFormationInfo(isSmallScreen),
+              const SizedBox(height: 8),
+              Expanded(child: _buildField(isSmallScreen)),
+              const SizedBox(height: 8),
+              if (widget.showFormationInfo) _buildBottomBar(isSmallScreen),
+              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -315,40 +303,367 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     );
   }
 
-  Widget _buildField(bool isSmallScreen) {
-    return Container(
-      margin: EdgeInsets.all(isSmallScreen ? 12 : 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+  // ─── Top Bar ──────────────────────────────────────────────────────────────
+
+  Widget _buildTopBar(bool isSmallScreen) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isSmallScreen ? 14 : 18,
+        isSmallScreen ? 10 : 14,
+        isSmallScreen ? 14 : 18,
+        0,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
-        child: Stack(
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -0.5),
+          end: Offset.zero,
+        ).animate(_slideAnim),
+        child: Row(
           children: [
-            Container(
+            _buildTeamTab(widget.team1,
+                teamIndex: 0, isSmallScreen: isSmallScreen),
+            Expanded(child: _buildMatchTitle(isSmallScreen)),
+            _buildTeamTab(widget.team2,
+                teamIndex: 1, isSmallScreen: isSmallScreen),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Default Header Badge Tab ─────────────────────────────────────────────
+
+  Widget _buildTeamTab(
+    TeamLineup team, {
+    required int teamIndex,
+    required bool isSmallScreen,
+  }) {
+    final isActive = selectedTeam == teamIndex;
+
+    return GestureDetector(
+      onTap: () => _selectTeam(teamIndex),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        width: isSmallScreen ? 72 : 84,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive
+              ? team.primaryColor.withValues(alpha: 0.15)
+              : _surfaceColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isActive
+                ? team.primaryColor.withValues(alpha: 0.6)
+                : _borderColor,
+            width: isActive ? 1.5 : 1,
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: team.primaryColor.withValues(alpha: 0.25),
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : [],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: isSmallScreen ? 32 : 38,
+              height: isSmallScreen ? 32 : 38,
               decoration: BoxDecoration(
+                shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: widget.fieldGradientColors,
-                  stops: widget.fieldGradientColors.length == 3
-                      ? const [0.0, 0.5, 1.0]
-                      : null,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [team.primaryColor, team.secondaryColor],
+                ),
+                boxShadow: isActive
+                    ? [
+                        BoxShadow(
+                          color: team.primaryColor.withValues(alpha: 0.55),
+                          blurRadius: 14,
+                        )
+                      ]
+                    : [],
+              ),
+              child: Center(
+                child: Text(
+                  team.teamLogo.length > 2
+                      ? team.teamLogo.substring(0, 2)
+                      : team.teamLogo,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isSmallScreen ? 9 : 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ),
-            CustomPaint(
-              painter: FieldPainterFactory.create(_fieldConfig),
-              size: Size.infinite,
+            const SizedBox(height: 5),
+            Text(
+              team.teamName,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isActive ? _textColor : _subtleColor,
+                fontSize: isSmallScreen ? 8 : 9,
+                fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                letterSpacing: 0.2,
+                height: 1.2,
+              ),
             ),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return Stack(
-                  children: _buildPlayers(constraints, isSmallScreen),
-                );
-              },
+            const SizedBox(height: 4),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              width: isActive ? 18 : 4,
+              height: 3,
+              decoration: BoxDecoration(
+                color: isActive ? team.primaryColor : _borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Match Title ──────────────────────────────────────────────────────────
+
+  Widget _buildMatchTitle(bool isSmallScreen) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    Colors.transparent,
+                    widget.team1.primaryColor.withValues(alpha: 0.6),
+                  ]),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Container(
+                width: 5,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: _subtleColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    widget.team2.primaryColor.withValues(alpha: 0.6),
+                    Colors.transparent,
+                  ]),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+
+        ShaderMask(
+          shaderCallback: (bounds) => LinearGradient(
+            colors: [
+              widget.team1.primaryColor,
+              widget.team1.secondaryColor,
+              widget.team2.secondaryColor,
+              widget.team2.primaryColor,
+            ],
+            stops: const [0.0, 0.35, 0.65, 1.0],
+          ).createShader(Rect.fromLTWH(0, 0, bounds.width, bounds.height)),
+          blendMode: BlendMode.srcIn,
+          child: Text(
+            'LINEUP',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: isSmallScreen ? 14 : 17,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 5,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 2),
+        Text(
+          'STARTING XI',
+          style: TextStyle(
+            color: _subtleColor,
+            fontSize: isSmallScreen ? 7 : 8,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 3.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [Colors.transparent, _borderColor]),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                'VS',
+                style: TextStyle(
+                  color: _subtleColor,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      colors: [_borderColor, Colors.transparent]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ─── Swap Hint ────────────────────────────────────────────────────────────
+
+  Widget _buildSwapHint() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: _currentTeam.primaryColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+              color: _currentTeam.primaryColor.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.swap_horiz_rounded,
+                color: _currentTeam.primaryColor, size: 16),
+            const SizedBox(width: 7),
+            Text(
+              'Drop on a player to swap positions',
+              style: TextStyle(
+                color: _textColor.withValues(alpha: 0.85),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Field ────────────────────────────────────────────────────────────────
+
+  Widget _buildField(bool isSmallScreen) {
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.08),
+        end: Offset.zero,
+      ).animate(_slideAnim),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 10 : 14),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 36,
+                spreadRadius: 2,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: _currentTeam.primaryColor.withValues(alpha: 0.1),
+                blurRadius: 50,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: Stack(
+              children: [
+                // ── Solid field color — no stripes ──
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: widget.fieldGradientColors,
+                      stops: widget.fieldGradientColors.length == 3
+                          ? const [0.0, 0.5, 1.0]
+                          : null,
+                    ),
+                  ),
+                ),
+
+                // ── Edge vignette only ──
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment.center,
+                        radius: 1.1,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.2),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Field lines ──
+                CustomPaint(
+                  painter: FieldPainterFactory.create(_fieldConfig),
+                  size: Size.infinite,
+                ),
+
+                // ── Players ──
+                LayoutBuilder(
+                  builder: (context, constraints) => Stack(
+                    children: _buildPlayers(constraints, isSmallScreen),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -362,83 +677,63 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
       final idx = entry.key;
       final player = entry.value;
 
-      // FIX: Handle nullable position properly
       Offset position;
       if (idx < offsets.length) {
-        // Use formation position by index
         position = offsets[idx];
       } else if (player.position != null) {
-        // Use manual position if specified
         position = player.position!;
       } else {
-        // Fallback to center if neither available
         position = const Offset(0.5, 0.5);
       }
 
       final isHovered = _hoveredPlayerIndex == idx;
-      final isDragging = _draggingPlayerIndex == idx;
 
       return Positioned(
         left: position.dx * constraints.maxWidth - (playerSize / 2),
         top: position.dy * constraints.maxHeight - (playerSize / 2 + 20),
         child: widget.enableSwapPosition
-            ? _buildDraggablePlayer(
-                player,
-                idx,
-                playerSize,
-                isSmallScreen,
-                isHovered,
-                isDragging,
-              )
+            ? _buildDraggablePlayer(player, idx, playerSize, isSmallScreen,
+                isHovered, _draggingPlayerIndex == idx)
             : _buildStaticPlayer(player, idx, playerSize, isSmallScreen),
       );
     }).toList();
   }
 
-  Widget _buildDraggablePlayer(
-    Player player,
-    int index,
-    double playerSize,
-    bool isSmallScreen,
-    bool isHovered,
-    bool isDragging,
-  ) {
+  Widget _buildDraggablePlayer(Player player, int index, double playerSize,
+      bool isSmallScreen, bool isHovered, bool isDragging) {
     return LongPressDraggable<int>(
       data: index,
       feedback: Material(
         color: Colors.transparent,
         child: Transform.scale(
-          scale: 1.3,
-          child: Opacity(
-            opacity: 0.9,
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: _currentTeam.primaryColor.withOpacity(0.6),
-                    blurRadius: 25,
-                    spreadRadius: 8,
-                  ),
-                ],
-              ),
-              child: PlayerAvatar(
-                player: player,
-                team: _currentTeam,
-                isSelected: true,
-                onTap: () {},
-                size: playerSize,
-                isSmallScreen: isSmallScreen,
-                nameLabelStyle: widget.nameLabelStyle,
-                playerNameColor: widget.playerNameColor,
-                playerNameBackgroundColor: widget.playerNameBackgroundColor,
-              ),
+          scale: 1.25,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: _currentTeam.primaryColor.withValues(alpha: 0.7),
+                  blurRadius: 30,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+            child: PlayerAvatar(
+              player: player,
+              team: _currentTeam,
+              isSelected: true,
+              onTap: () {},
+              size: playerSize,
+              isSmallScreen: isSmallScreen,
+              nameLabelStyle: widget.nameLabelStyle,
+              playerNameColor: widget.playerNameColor,
+              playerNameBackgroundColor: widget.playerNameBackgroundColor,
             ),
           ),
         ),
       ),
       childWhenDragging: Opacity(
-        opacity: 0.2,
+        opacity: 0.15,
         child: PlayerAvatar(
           player: player,
           team: _currentTeam,
@@ -451,83 +746,63 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
           playerNameBackgroundColor: widget.playerNameBackgroundColor,
         ),
       ),
-      onDragStarted: () {
-        setState(() {
-          _draggingPlayerIndex = index;
-        });
-      },
-      onDragEnd: (details) {
-        setState(() {
-          _draggingPlayerIndex = null;
-          _hoveredPlayerIndex = null;
-        });
-      },
-      onDraggableCanceled: (velocity, offset) {
-        setState(() {
-          _draggingPlayerIndex = null;
-          _hoveredPlayerIndex = null;
-        });
-      },
+      onDragStarted: () => setState(() => _draggingPlayerIndex = index),
+      onDragEnd: (_) => setState(() {
+        _draggingPlayerIndex = null;
+        _hoveredPlayerIndex = null;
+      }),
+      onDraggableCanceled: (_, __) => setState(() {
+        _draggingPlayerIndex = null;
+        _hoveredPlayerIndex = null;
+      }),
       child: DragTarget<int>(
-        onWillAccept: (fromIndex) {
-          if (fromIndex == null || fromIndex == index) return false;
-          setState(() {
-            _hoveredPlayerIndex = index;
-          });
+        onWillAccept: (from) {
+          if (from == null || from == index) return false;
+          setState(() => _hoveredPlayerIndex = index);
           return true;
         },
-        onLeave: (fromIndex) {
-          setState(() {
-            _hoveredPlayerIndex = null;
-          });
-        },
-        onAccept: (fromIndex) {
-          _handlePositionSwap(fromIndex, index);
-        },
-        builder: (context, candidateData, rejectedData) {
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: isHovered
-                  ? [
-                      BoxShadow(
-                        color: _currentTeam.primaryColor.withOpacity(0.6),
-                        blurRadius: 20,
-                        spreadRadius: 5,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: PlayerAvatar(
-              player: player,
-              team: _currentTeam,
-              isSelected: selectedPlayer?.number == player.number || isHovered,
-              onTap: () {
-                setState(() {
-                  selectedPlayer =
-                      selectedPlayer?.number == player.number ? null : player;
-                });
-                widget.onPlayerTap?.call(player, _currentTeam);
-              },
-              size: playerSize,
-              isSmallScreen: isSmallScreen,
-              nameLabelStyle: widget.nameLabelStyle,
-              playerNameColor: widget.playerNameColor,
-              playerNameBackgroundColor: widget.playerNameBackgroundColor,
-            ),
-          );
-        },
+        onLeave: (_) => setState(() => _hoveredPlayerIndex = null),
+        onAccept: (from) => _handlePositionSwap(from, index),
+        builder: (context, _, __) => AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: isHovered
+                ? [
+                    BoxShadow(
+                      color:
+                          _currentTeam.primaryColor.withValues(alpha: 0.65),
+                      blurRadius: 22,
+                      spreadRadius: 4,
+                    )
+                  ]
+                : null,
+          ),
+          child: PlayerAvatar(
+            player: player,
+            team: _currentTeam,
+            isSelected:
+                selectedPlayer?.number == player.number || isHovered,
+            onTap: () {
+              setState(() {
+                selectedPlayer =
+                    selectedPlayer?.number == player.number ? null : player;
+              });
+              widget.onPlayerTap?.call(player, _currentTeam);
+            },
+            size: playerSize,
+            isSmallScreen: isSmallScreen,
+            nameLabelStyle: widget.nameLabelStyle,
+            playerNameColor: widget.playerNameColor,
+            playerNameBackgroundColor: widget.playerNameBackgroundColor,
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildStaticPlayer(
-    Player player,
-    int index,
-    double playerSize,
-    bool isSmallScreen,
-  ) {
+      Player player, int index, double playerSize, bool isSmallScreen) {
     return PlayerAvatar(
       player: player,
       team: _currentTeam,
@@ -547,116 +822,133 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     );
   }
 
-  Widget _buildFormationInfo(bool isSmallScreen) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isSmallScreen ? 12 : 16,
-        vertical: isSmallScreen ? 8 : 10,
-      ),
-      decoration: BoxDecoration(
-        color: widget.backgroundColor,
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.grey[800]!,
-            width: 1,
-          ),
+  // ─── Bottom Bar ───────────────────────────────────────────────────────────
+
+  Widget _buildBottomBar(bool isSmallScreen) {
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.5),
+        end: Offset.zero,
+      ).animate(_slideAnim),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 14 : 18),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () => _showFormationPicker(isSmallScreen),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 12 : 16,
+                  vertical: isSmallScreen ? 8 : 9,
+                ),
+                decoration: BoxDecoration(
+                  color: _currentTeam.primaryColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          _currentTeam.primaryColor.withValues(alpha: 0.4),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.grid_view_rounded,
+                        color: Colors.white, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      _currentFormation,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: isSmallScreen ? 12 : 13,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white, size: 14),
+                  ],
+                ),
+              ),
+            ),
+            const Spacer(),
+            _buildInfoChip(
+              icon: Icons.person_rounded,
+              label: _currentTeam.coach,
+              iconColor: _managerIconColor,
+              textColor: _managerTextColor,
+              isSmallScreen: isSmallScreen,
+            ),
+            if (widget.showPlayerCountInfo) ...[
+              const SizedBox(width: 6),
+              Container(width: 1, height: 12, color: _borderColor),
+              const SizedBox(width: 6),
+              _buildInfoChip(
+                icon: Icons.groups_rounded,
+                label:
+                    '${_currentTeam.players.length}/${widget.fieldType.playerCount}',
+                iconColor: _playerCountIconColor,
+                textColor: _playerCountTextColor,
+                isSmallScreen: isSmallScreen,
+              ),
+            ],
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoChip({
+    required IconData icon,
+    required String label,
+    required Color iconColor,
+    required Color textColor,
+    required bool isSmallScreen,
+  }) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 8 : 10,
+        vertical: isSmallScreen ? 6 : 7,
+      ),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _borderColor),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          InkWell(
-            onTap: () => _showFormationPicker(isSmallScreen),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isSmallScreen ? 10 : 12,
-                vertical: isSmallScreen ? 6 : 8,
-              ),
-              decoration: BoxDecoration(
-                color: _currentTeam.primaryColor,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _currentFormation,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: isSmallScreen ? 13 : 14,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ],
-              ),
+          Icon(icon, color: iconColor, size: isSmallScreen ? 12 : 14),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: isSmallScreen ? 10 : 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
             ),
           ),
-          const Spacer(),
-          _buildCompactInfo(
-            Icons.person,
-            _currentTeam.coach,
-            isSmallScreen,
-            iconColor: widget.managerIconColor,
-            textColor: widget.managerTextColor,
-          ),
-          if (widget.showPlayerCountInfo) ...[
-            SizedBox(width: isSmallScreen ? 16 : 20),
-            _buildCompactInfo(
-              Icons.groups,
-              '${_currentTeam.players.length}/${widget.fieldType.playerCount}',
-              isSmallScreen,
-              iconColor: widget.playerCountIconColor,
-              textColor: widget.playerCountTextColor,
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildCompactInfo(
-    IconData icon,
-    String value,
-    bool isSmallScreen, {
-    required Color iconColor,
-    required Color textColor,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          icon,
-          color: iconColor,
-          size: isSmallScreen ? 16 : 18,
-        ),
-        const SizedBox(width: 6),
-        Text(
-          value,
-          style: TextStyle(
-            color: textColor,
-            fontSize: isSmallScreen ? 13 : 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
+  // ─── Formation Picker ─────────────────────────────────────────────────────
 
   void _showFormationPicker(bool isSmallScreen) {
-    final formations = _fieldConfig.formations;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) {
         String search = '';
-        String currentSelected = _currentFormation;
+        final formations = _fieldConfig.formations;
 
         return DraggableScrollableSheet(
           initialChildSize: 0.75,
@@ -665,46 +957,40 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
           builder: (context, scrollCtrl) {
             return Container(
               decoration: BoxDecoration(
-                color: widget.backgroundColor,
+                color: const Color(0xFF10131A),
                 borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(32)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 40,
-                    offset: const Offset(0, -10),
-                  ),
-                ],
+                    const BorderRadius.vertical(top: Radius.circular(26)),
+                border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.07), width: 1),
               ),
               child: StatefulBuilder(
                 builder: (context, setStateSB) {
                   final filtered = formations.entries
-                      .where((e) =>
-                          e.key.toLowerCase().contains(search.toLowerCase()))
+                      .where((e) => e.key
+                          .toLowerCase()
+                          .contains(search.toLowerCase()))
                       .toList();
 
                   return Column(
                     children: [
-                      _buildPickerHeader(ctx, search, setStateSB, isSmallScreen,
-                          filtered.length),
-                      const SizedBox(height: 24),
+                      _buildSheetHandle(),
+                      _buildSheetHeader(ctx, search, setStateSB,
+                          isSmallScreen, filtered.length),
+                      const SizedBox(height: 12),
                       Expanded(
                         child: filtered.isEmpty
-                            ? _buildEmptyState(isSmallScreen)
+                            ? _buildEmptyState()
                             : ListView.builder(
                                 controller: scrollCtrl,
-                                padding:
-                                    const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                                padding: const EdgeInsets.fromLTRB(
+                                    18, 0, 18, 24),
                                 itemCount: filtered.length,
                                 itemBuilder: (context, idx) {
                                   final entry = filtered[idx];
-                                  final isSelected =
-                                      currentSelected == entry.key;
-
                                   return _buildFormationCard(
                                     entry.key,
                                     entry.value,
-                                    isSelected,
+                                    _currentFormation == entry.key,
                                     isSmallScreen,
                                     ctx,
                                   );
@@ -722,89 +1008,114 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     );
   }
 
-  Widget _buildPickerHeader(
-    BuildContext ctx,
-    String search,
-    StateSetter setStateSB,
-    bool isSmallScreen,
-    int count,
-  ) {
+  Widget _buildSheetHandle() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Center(
+        child: Container(
+          width: 32,
+          height: 3,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(2),
           ),
-          const SizedBox(height: 20),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetHeader(BuildContext ctx, String search,
+      StateSetter setStateSB, bool isSmallScreen, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
               Container(
-                width: isSmallScreen ? 48 : 56,
-                height: isSmallScreen ? 48 : 56,
+                width: isSmallScreen ? 42 : 48,
+                height: isSmallScreen ? 42 : 48,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      _currentTeam.primaryColor,
-                      _currentTeam.secondaryColor,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.dashboard_customize_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Choose Formation',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$count formations available',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[400],
-                      ),
-                    ),
+                  gradient: LinearGradient(colors: [
+                    _currentTeam.primaryColor,
+                    _currentTeam.secondaryColor,
+                  ]),
+                  borderRadius: BorderRadius.circular(13),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          _currentTeam.primaryColor.withValues(alpha: 0.4),
+                      blurRadius: 12,
+                    )
                   ],
                 ),
+                child: const Icon(Icons.dashboard_customize_rounded,
+                    color: Colors.white, size: 22),
               ),
-              IconButton(
-                icon: const Icon(Icons.close_rounded, color: Colors.white),
-                onPressed: () => Navigator.of(ctx).pop(),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Formation',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                  Text(
+                    '$count options',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.of(ctx).pop(),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.07),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 17),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          TextField(
-            onChanged: (v) => setStateSB(() => search = v),
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Search formations...',
-              hintStyle: TextStyle(color: Colors.grey[600]),
-              prefixIcon: Icon(Icons.search_rounded, color: Colors.grey[600]),
-              filled: true,
-              fillColor: Colors.grey.withOpacity(0.1),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
+          const SizedBox(height: 14),
+          Container(
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(11),
+              border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: TextField(
+              onChanged: (v) => setStateSB(() => search = v),
+              style:
+                  const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search…',
+                hintStyle:
+                    TextStyle(color: Colors.grey[700], fontSize: 13),
+                prefixIcon: Icon(Icons.search_rounded,
+                    color: Colors.grey[700], size: 18),
+                border: InputBorder.none,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 13),
               ),
             ),
           ),
@@ -821,176 +1132,177 @@ class _DynamicLineupScreenState extends State<DynamicLineupScreen> {
     BuildContext ctx,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 10),
       child: GestureDetector(
         onTap: () {
           setState(() {
             _selectedFormation[selectedTeam] = formationName;
-            // Reset position overrides when formation changes
             _teamPositionOverrides[_currentTeamIndex] = [];
           });
           widget.onFormationChanged?.call(selectedTeam, formationName);
           Navigator.of(ctx).pop();
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: isSelected
-                ? _currentTeam.primaryColor.withOpacity(0.12)
-                : Colors.grey.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(20),
+                ? _currentTeam.primaryColor.withValues(alpha: 0.1)
+                : Colors.white.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: isSelected
-                  ? _currentTeam.primaryColor.withOpacity(0.4)
-                  : Colors.grey.withOpacity(0.1),
-              width: isSelected ? 2 : 1,
+                  ? _currentTeam.primaryColor.withValues(alpha: 0.45)
+                  : Colors.white.withValues(alpha: 0.06),
+              width: isSelected ? 1.5 : 1,
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 80,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
+          child: Row(
+            children: [
+              Container(
+                width: 66,
+                height: 82,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
                   ),
-                  child: _buildFormationPreview(formationData, isSelected),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08)),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            formationName,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                child: _buildFormationPreview(formationData, isSelected),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          formationName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (isSelected)
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(colors: [
+                                _currentTeam.primaryColor,
+                                _currentTeam.secondaryColor,
+                              ]),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.check_rounded,
+                                color: Colors.white, size: 13),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      formationData.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[600],
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: formationData.tags.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(
+                                color:
+                                    Colors.white.withValues(alpha: 0.07)),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: Colors.grey[500],
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
                             ),
                           ),
-                          const Spacer(),
-                          if (isSelected)
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    _currentTeam.primaryColor,
-                                    _currentTeam.secondaryColor,
-                                  ],
-                                ),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.check_rounded,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        formationData.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[400],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: formationData.tags.map((tag) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              tag,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey[400],
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildFormationPreview(FormationData formationData, bool isSelected) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        final h = constraints.maxHeight;
-        return Stack(
-          children: formationData.positions.map((pos) {
-            return Positioned(
-              left: pos.dx * w - 4,
-              top: pos.dy * h - 4,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: isSelected ? _currentTeam.primaryColor : Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
+  Widget _buildFormationPreview(
+      FormationData formationData, bool isSelected) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      final h = constraints.maxHeight;
+      return Stack(
+        children: formationData.positions.map((pos) {
+          return Positioned(
+            left: pos.dx * w - 4,
+            top: pos.dy * h - 4,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? _currentTeam.primaryColor
+                    : Colors.white.withValues(alpha: 0.7),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: (isSelected
+                            ? _currentTeam.primaryColor
+                            : Colors.white)
+                        .withValues(alpha: 0.4),
+                    blurRadius: 4,
+                  ),
+                ],
               ),
-            );
-          }).toList(),
-        );
-      },
-    );
+            ),
+          );
+        }).toList(),
+      );
+    });
   }
 
-  Widget _buildEmptyState(bool isSmallScreen) {
+  Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.search_off_rounded,
-            size: 56,
-            color: Colors.grey[600],
-          ),
-          const SizedBox(height: 20),
-          const Text(
+          Icon(Icons.search_off_rounded,
+              size: 44, color: Colors.grey[700]),
+          const SizedBox(height: 12),
+          Text(
             'No formations found',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

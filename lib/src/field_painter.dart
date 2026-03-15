@@ -1,23 +1,16 @@
 import 'package:flutter/material.dart';
-
 import 'field_config.dart';
 
-/// Base class for field painters
 abstract class BaseFieldPainter extends CustomPainter {
   const BaseFieldPainter({required this.config});
-
   final FieldConfig config;
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 
-  /// Draw the standard field markings
-  void drawFieldMarkings(Canvas canvas, Size size, Paint paint) {
-    // Override in subclasses
-  }
+  void drawFieldMarkings(Canvas canvas, Size size, Paint paint) {}
 }
 
-/// Standard 11-a-side field painter
 class StandardFieldPainter extends BaseFieldPainter {
   const StandardFieldPainter({required super.config});
 
@@ -26,9 +19,8 @@ class StandardFieldPainter extends BaseFieldPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
-      ..color = Colors.white.withOpacity(0.25);
+      ..color = Colors.white.withValues(alpha: 0.25);
 
-    // Outer boundary
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(8, 8, size.width - 16, size.height - 16),
@@ -37,30 +29,25 @@ class StandardFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Center line
     canvas.drawLine(
       Offset(8, size.height / 2),
       Offset(size.width - 8, size.height / 2),
       paint,
     );
 
-    // Center circle
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
       size.width * config.centerCircleRadius,
       paint,
     );
 
-    // Center spot
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(Offset(size.width / 2, size.height / 2), 3, paint);
     paint.style = PaintingStyle.stroke;
 
-    // Penalty boxes
     final penaltyBoxWidth = size.width * config.penaltyBoxWidth;
     final penaltyBoxHeight = size.height * config.penaltyBoxHeight;
 
-    // Top penalty box
     canvas.drawRect(
       Rect.fromLTWH(
         (size.width - penaltyBoxWidth) / 2,
@@ -71,7 +58,6 @@ class StandardFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Bottom penalty box
     canvas.drawRect(
       Rect.fromLTWH(
         (size.width - penaltyBoxWidth) / 2,
@@ -82,11 +68,9 @@ class StandardFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Six-yard boxes
     final sixYardBoxWidth = size.width * config.sixYardBoxWidth;
     final sixYardBoxHeight = size.height * config.sixYardBoxHeight;
 
-    // Top six-yard box
     canvas.drawRect(
       Rect.fromLTWH(
         (size.width - sixYardBoxWidth) / 2,
@@ -97,7 +81,6 @@ class StandardFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Bottom six-yard box
     canvas.drawRect(
       Rect.fromLTWH(
         (size.width - sixYardBoxWidth) / 2,
@@ -108,7 +91,6 @@ class StandardFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Penalty spots
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(
       Offset(size.width / 2, 8 + penaltyBoxHeight * 0.75),
@@ -123,7 +105,6 @@ class StandardFieldPainter extends BaseFieldPainter {
   }
 }
 
-/// Seven-a-side field painter
 class SevenASideFieldPainter extends BaseFieldPainter {
   const SevenASideFieldPainter({required super.config});
 
@@ -132,9 +113,8 @@ class SevenASideFieldPainter extends BaseFieldPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
-      ..color = Colors.white.withOpacity(0.25);
+      ..color = Colors.white.withValues(alpha: 0.25);
 
-    // Outer boundary
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(8, 8, size.width - 16, size.height - 16),
@@ -143,26 +123,22 @@ class SevenASideFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Center line
     canvas.drawLine(
       Offset(8, size.height / 2),
       Offset(size.width - 8, size.height / 2),
       paint,
     );
 
-    // Center circle
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
       size.width * config.centerCircleRadius,
       paint,
     );
 
-    // Center spot
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(Offset(size.width / 2, size.height / 2), 3, paint);
     paint.style = PaintingStyle.stroke;
 
-    // Penalty boxes
     final penaltyBoxWidth = size.width * config.penaltyBoxWidth;
     final penaltyBoxHeight = size.height * config.penaltyBoxHeight;
 
@@ -186,7 +162,6 @@ class SevenASideFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Penalty spots
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(
       Offset(size.width / 2, 8 + penaltyBoxHeight * 0.72),
@@ -201,7 +176,6 @@ class SevenASideFieldPainter extends BaseFieldPainter {
   }
 }
 
-/// Five-a-side field painter
 class FiveASideFieldPainter extends BaseFieldPainter {
   const FiveASideFieldPainter({required super.config});
 
@@ -210,9 +184,8 @@ class FiveASideFieldPainter extends BaseFieldPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8
-      ..color = Colors.white.withOpacity(0.25);
+      ..color = Colors.white.withValues(alpha: 0.25);
 
-    // Outer boundary
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(8, 8, size.width - 16, size.height - 16),
@@ -221,26 +194,22 @@ class FiveASideFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Center line
     canvas.drawLine(
       Offset(8, size.height / 2),
       Offset(size.width - 8, size.height / 2),
       paint,
     );
 
-    // Center circle
     canvas.drawCircle(
       Offset(size.width / 2, size.height / 2),
       size.width * config.centerCircleRadius,
       paint,
     );
 
-    // Center spot
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(Offset(size.width / 2, size.height / 2), 2.5, paint);
     paint.style = PaintingStyle.stroke;
 
-    // Penalty boxes
     final penaltyBoxWidth = size.width * config.penaltyBoxWidth;
     final penaltyBoxHeight = size.height * config.penaltyBoxHeight;
 
@@ -264,7 +233,6 @@ class FiveASideFieldPainter extends BaseFieldPainter {
       paint,
     );
 
-    // Penalty spots
     paint.style = PaintingStyle.fill;
     canvas.drawCircle(
       Offset(size.width / 2, 8 + penaltyBoxHeight * 0.68),
@@ -279,7 +247,6 @@ class FiveASideFieldPainter extends BaseFieldPainter {
   }
 }
 
-/// Factory for creating field painters
 class FieldPainterFactory {
   static BaseFieldPainter create(FieldConfig config) {
     switch (config.fieldPainter) {
