@@ -1,0 +1,13 @@
+name: football_lineup_example
+description: Example app for football_lineup — run and use as source.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  football_lineup:
+    path: ../
